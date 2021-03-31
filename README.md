@@ -1,4 +1,4 @@
-# PEGS_libs
+# PEGS_common
 This repo contains common libraries and tools developed and used by the StatGen group for the PEGS Data.
 
 ## pegs_common_utils
