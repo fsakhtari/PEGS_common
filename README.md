@@ -1,12 +1,11 @@
 # PEGS_common
-This repository contains common libraries and tools developed and used by the
-StatGen group for the PEGS Data.
+This repository contains common libraries and tools developed by the NIEHS
+StatGen group for the Personalized Environment and Genes Study (PEGS) data.
 
 ## pegs_common_utils
 
 The library pegs_common_utils.R provides common utilitarian constants and
-functions useful for analyzing the Personalized Environment and Genes Study 
-(PEGS) datasets.
+functions useful for analyzing the PEGS datasets.
 
 ## Bug report / Feature request / Help
 
