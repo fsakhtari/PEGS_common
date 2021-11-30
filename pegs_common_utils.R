@@ -15,7 +15,10 @@ librarian::shelf(data.table, naniar, tidyverse, wrapr)
 ### Common constants ###
 
 # special codes
-PEGS_SP_CODES <- qc(.M, .S, -444444, -555555, -666666, -777777, -888888, -999999)
+PEGS_SP_CODES <- qc(
+  .M, .S, .N,
+  -444444, -555555, -666666, -777777, -888888, -999999
+)
 
 
 ### Common functions ###
@@ -29,7 +32,8 @@ PEGS_SP_CODES <- qc(.M, .S, -444444, -555555, -666666, -777777, -888888, -999999
 # The converted PEGS dataframe
 pegs_convert_type <- function(pegs_df, pegs_df_meta) {
   # All special codes need to be replaced with NA before type conversion
-  pegs_df <- pegs_df %>% replace_with_na_all(condition = ~ .x %in% PEGS_SP_CODES)
+  pegs_df <- pegs_df %>%
+    replace_with_na_all(condition = ~ .x %in% PEGS_SP_CODES)
 
   for (col in colnames(pegs_df)) {
     print(col)
@@ -43,6 +47,7 @@ pegs_convert_type <- function(pegs_df, pegs_df_meta) {
       "character" = as.character(pegs_df[[col]]),
       "factor" = as.factor(pegs_df[[col]]),
       "ordered factor" = as.factor(pegs_df[[col]]),
+      "date" = as.Date(pegs_df[[col]]),
       pegs_df[[col]]
     )
   }
@@ -51,6 +56,45 @@ pegs_convert_type <- function(pegs_df, pegs_df_meta) {
 
 # For backward compatibility
 epr_convert_type <- function(pegs_df, pegs_df_meta) pegs_convert_type(pegs_df, pegs_df_meta)
+
+
+# Convert the specified label string from any PEGS metadata file to a named
+# character vector containing key-value pairs.
+# Arguments:-
+# labels  : character, the label string from a PEGS metadata file
+# Returns:-
+# A named character vector containing key-value pairs
+# Example usage to recode gender values:
+# gender_labels <- create_label_vector(
+#   epr.bcbb.map.meta %>% filter(variable_name == "gender") %>% pull(label)
+# )
+# epr.bcbb.map.labeled <- epr.bcbb.map.conv %>%
+#   mutate(gender = recode_factor(gender, !!!gender_labels))
+create_label_vector <- function(labels) {
+
+  # Separate the multiple labels in the label string (at ';') and then separate
+  # each label into key and value pairs (at '=').
+  kv_pairs <- strsplit(unlist(str_split(labels, ";")), "=")
+
+  # Remove unwanted characters from the keys and values
+  kv_pairs <- lapply(kv_pairs, function(x) {
+    x <- trimws(x)
+    x <- gsub("(^')|('$)", "", x)
+    return(x)
+  })
+
+  # Convert to a two-column data frame with the keys in one column and the
+  # values in the other column.
+  kv.df <- do.call(rbind.data.frame, kv_pairs)
+  names(kv.df) <- c("key", "value")
+
+  # Convert to a named character vector containing key-value pairs
+  label_vector <- kv.df %>%
+    pmap(~ set_names(..2, ..1)) %>%
+    unlist()
+
+  return(label_vector)
+}
 
 
 # Define the specified phenotype in the UK Biobank data. Identify cases
@@ -137,8 +181,7 @@ prepare_ukb_phenotype <- function(ukb_data, phenotype) {
     ukb_pheno_prepd <- data.frame(f.eid = ukb_data$f.eid, Y = Y)
 
     return(ukb_pheno_prepd)
-  }
-  else {
+  } else {
     stop("Unrecognized phenotype string : 'phenotype'")
   }
 }
@@ -168,14 +211,14 @@ prepare_pegs_phenotype <- function(pegs_data, phenotype) {
 
     diabetes_exclusions <- pegs_data %>%
       filter(he_c022_diabetes_PARQ == 1) %>%
-      filter(onset_age_under_20 == 1
-      | is.na(onset_age_under_20)) %>%
+      filter(onset_age_under_20 == 1 |
+        is.na(onset_age_under_20)) %>%
       pull(epr_number)
     diabetes_exclusions <- sort(unique(c(
       diabetes_exclusions,
       (pegs_data %>%
-        filter(he_c022_diabetes_PARQ == 1
-        & .data[["_he_gender_"]] %in% c(1, NA)) %>%
+        filter(he_c022_diabetes_PARQ == 1 &
+          .data[["_he_gender_"]] %in% c(1, NA)) %>%
         filter(he_c022a_diabetes_preg_CHILDQ == 1) %>%
         pull(epr_number))
     )))
