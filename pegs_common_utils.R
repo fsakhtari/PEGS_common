@@ -258,3 +258,70 @@ prepare_pegs_phenotype <- function(pegs_data, phenotype) {
 
   return(pegs_pheno_prepd)
 }
+
+#' PEGS data converter
+#'
+#' convert PEGS text table entries to NA and proper R types;
+#'
+#' this function works for text tables and meta-data from PEGS Freeze v2,
+#' loaded from
+#'
+#' - /ddn/gs1/project/controlled/PEGS/Data_Freezes/freeze_v2/Surveys
+#'   * Health_and_Exposure/healthexposure_*_v2.* # epr.he and epr.he.meta
+#'   * Exposome/exposomea_*_v2.*                 # exposome a
+#'   * Exposome/exposomea_*_v2.*                 # exposome b
+#'
+#' @param dat one of the PEGS text tables (i.e., epr.he)
+#' @param met corresponding meta-data (i.e., epr.he.meta)
+#' @return data frame with NA and proper column classes.
+cvt <- function(dat, met, quiet=TRUE)
+{
+    ## code for NA
+    NAS <- c(".M", ".S", ".N", "-444444", "-555555", "-666666", "-777777", "-888888", "-999999")
+    ## list for converters, add character="identity"
+    CVS <- c(binary=as.factor, factor=as.factor, numeric=as.numeric,
+             `ordered factor`=as.factor, date=as.Date, character=identity)
+
+    ## set NA
+    dat <- as.matrix(dat); dat[dat %in% NAS] <- NA; dat <- as.data.frame(dat)
+    
+    ## convert to R types
+    ## look up the meta-data with table headers, gets long variable names
+    ## look up the list of converter with long variable names, gets converters
+    cnv <- CVS[met$true_class[match(names(dat), met$long_variable_name)]]
+    for(i in seq_along(dat))
+    {
+        dat[[i]] <- cnv[[i]](dat[[i]])
+        if(!quiet)
+            cat(sprintf("%4i %-40s %16s -> %s\n", i, names(dat)[i], lvn[i], class(dat[[i]])))
+    }
+    dat
+}
+
+#' check the equivalence between coverters
+#'
+#' this works for PEGS Data Freeze V2.
+test <- function()
+{
+    source("https://raw.githubusercontent.com/fsakhtari/PEGS_common/master/pegs_common_utils.R")
+    pgs_dir <- "/ddn/gs1/project/controlled/PEGS/Data_Freezes/freeze_v2"
+    ## test health and exposure
+    load(file.path(pgs_dir, "Surveys/Health_and_Exposure/healthexposure_26aug21_v2.RData"))
+    he1 <- pegs_convert_type(epr.he, epr.he.meta)
+    he2 <- cvt(epr.he, epr.he.meta)
+    cat("he1 == he2: ", all.equal(as.data.frame(he1), he2), "\n", sep="")
+
+    ## test exposome A
+    load(file.path(pgs_dir, "Surveys/Exposome/exposomea_02jun21_v2.RData"))
+    ea1 <- pegs_convert_type(epr.ea, epr.ea.meta)
+    ea2 <- cvt(epr.ea, epr.ea.meta)
+    cat("ea1 == ea2: ", all.equal(as.data.frame(ea1), ea2), "\n", sep="")
+    
+    ## test exposome B
+    load(file.path(pgs_dir, "Surveys/Exposome/exposomeb_02jun21_v2.RData"))
+    eb1 <- pegs_convert_type(epr.eb, epr.eb.meta)
+    eb2 <- cvt(epr.eb, epr.eb.meta)
+    cat("eb1 == eb2: ", all.equal(as.data.frame(eb1), eb2), "\n", sep="")
+
+    invisible(NULL)
+}
