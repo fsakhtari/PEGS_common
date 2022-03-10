@@ -30,7 +30,7 @@ PEGS_SP_CODES <- qc(
 # pegs_df_meta  : The accompanying PEGS metadata dataframe
 # Returns:-
 # The converted PEGS dataframe
-pegs_convert_type <- function(pegs_df, pegs_df_meta) {
+pegs_convert_type_original <- function(pegs_df, pegs_df_meta) {
   # All special codes need to be replaced with NA before type conversion
   pegs_df <- pegs_df %>%
     replace_with_na_all(condition = ~ .x %in% PEGS_SP_CODES)
@@ -52,6 +52,70 @@ pegs_convert_type <- function(pegs_df, pegs_df_meta) {
     )
   }
   return(pegs_df)
+}
+
+
+#' PEGS data converter
+#'
+#' Convert columns  in the  PEGS data  frame to  appropriate variable  types as
+#' specified in the metadata file.  Special codes are converted to NA.
+#'
+#' @param pegs_df The PEGS dataframe to convert
+#' @param pegs_df_meta The accompanying PEGS metadata dataframe
+#' @param quiet do not report conversion progress (def=TRUE)
+#' @return The converted PEGS dataframe
+pegs_convert_type <- function(pegs_df, pegs_df_meta, quiet=TRUE)
+{
+    ## list for converters, add character="identity"
+    CONVERTERS <- c(binary=as.factor, factor=as.factor, numeric=as.numeric,
+                    `ordered factor`=as.factor, date=as.Date, character=identity)
+    ## set NA
+    pegs_df <- as.matrix(pegs_df)
+    pegs_df[pegs_df %in% PEGS_SP_CODES] <- NA
+    pegs_df <- as.data.frame(pegs_df)
+    
+    ## convert to R types
+    ## look up the meta-data long variable names with table headers, gets true class
+    true_class <- with(pegs_df_meta,
+                       true_class[match(names(pegs_df), long_variable_name)])
+    ## look up the list of converter with true classes, gets converters
+    converters <- CONVERTERS[true_class]
+    for(i in seq_along(pegs_df))
+    {
+        pegs_df[[i]] <- converters[[i]](pegs_df[[i]])
+        if(!quiet)
+            cat(sprintf("%4i %-40s %16s -> %s\n",
+                        i, names(pegs_df)[i], true_class[i], class(pegs_df[[i]])))
+    }
+    return(pegs_df)
+}
+
+#' check the equivalence between coverters
+#'
+#' this works for PEGS Data Freeze V2.
+#' All three test must return TRUE.
+pegs_convert_type_test <- function()
+{
+    pgs_dir <- "/ddn/gs1/project/controlled/PEGS/Data_Freezes/freeze_v2"
+    ## test health and exposure
+    load(file.path(pgs_dir, "Surveys/Health_and_Exposure/healthexposure_26aug21_v2.RData"))
+    he1 <- pegs_convert_type_original(epr.he, epr.he.meta)
+    he2 <- pegs_convert_type(epr.he, epr.he.meta, quiet=FALSE)
+    cat("he1 == he2: ", all.equal(as.data.frame(he1), he2), "\n", sep="")
+
+    ## test exposome A
+    load(file.path(pgs_dir, "Surveys/Exposome/exposomea_02jun21_v2.RData"))
+    ea1 <- pegs_convert_type_original(epr.ea, epr.ea.meta)
+    ea2 <- pegs_convert_type(epr.ea, epr.ea.meta, quiet=FALSE)
+    cat("ea1 == ea2: ", all.equal(as.data.frame(ea1), ea2), "\n", sep="")
+    
+    ## test exposome B
+    load(file.path(pgs_dir, "Surveys/Exposome/exposomeb_02jun21_v2.RData"))
+    eb1 <- pegs_convert_type_original(epr.eb, epr.eb.meta)
+    eb2 <- pegs_convert_type(epr.eb, epr.eb.meta, quiet=FALSE)
+    cat("eb1 == eb2: ", all.equal(as.data.frame(eb1), eb2), "\n", sep="")
+
+    return(invisible(NULL))
 }
 
 # For backward compatibility
@@ -257,71 +321,4 @@ prepare_pegs_phenotype <- function(pegs_data, phenotype) {
   print(table(pegs_pheno_prepd$Y, exclude = NULL))
 
   return(pegs_pheno_prepd)
-}
-
-#' PEGS data converter
-#'
-#' Convert columns  in the  PEGS data  frame to  appropriate variable  types as
-#' specified in the metadata file.  Special codes are converted to NA.
-#'
-#' @param pegs_df The PEGS dataframe to convert
-#' @param pegs_df_meta The accompanying PEGS metadata dataframe
-#' @param quiet do not report conversion progress (def=TRUE)
-#' @return The converted PEGS dataframe
-cvt <- function(pegs_df, pegs_df_meta, quiet=TRUE)
-{
-    ## special code for NA
-    PEGS_SP_CODES <- c(".M", ".S", ".N", "-444444", "-555555", "-666666",
-                       "-777777", "-888888", "-999999")
-    ## list for converters, add character="identity"
-    CONVERTERS <- c(binary=as.factor, factor=as.factor, numeric=as.numeric,
-                    `ordered factor`=as.factor, date=as.Date, character=identity)
-
-    ## set NA
-    pegs_df <- as.matrix(pegs_df)
-    pegs_df[pegs_df %in% PEGS_SP_CODES] <- NA
-    pegs_df <- as.data.frame(pegs_df)
-    
-    ## convert to R types
-    ## look up the meta-data long variable names with table headers, gets true class
-    true_class <- with(pegs_df_meta,
-                       true_class[match(names(pegs_df), long_variable_name)])
-    ## look up the list of converter with true classes, gets converters
-    converters <- CONVERTERS[true_class]
-    for(i in seq_along(pegs_df))
-    {
-        pegs_df[[i]] <- converters[[i]](pegs_df[[i]])
-        if(!quiet)
-            cat(sprintf("%4i %-40s %16s -> %s\n",
-                        i, names(pegs_df)[i], true_class[i], class(pegs_df[[i]])))
-    }
-    return(pegs_df)
-}
-
-#' check the equivalence between coverters
-#'
-#' this works for PEGS Data Freeze V2.
-test <- function()
-{
-    source("https://raw.githubusercontent.com/fsakhtari/PEGS_common/master/pegs_common_utils.R")
-    pgs_dir <- "/ddn/gs1/project/controlled/PEGS/Data_Freezes/freeze_v2"
-    ## test health and exposure
-    load(file.path(pgs_dir, "Surveys/Health_and_Exposure/healthexposure_26aug21_v2.RData"))
-    he1 <- pegs_convert_type(epr.he, epr.he.meta)
-    he2 <- cvt(epr.he, epr.he.meta, quiet=FALSE)
-    cat("he1 == he2: ", all.equal(as.data.frame(he1), he2), "\n", sep="")
-
-    ## test exposome A
-    load(file.path(pgs_dir, "Surveys/Exposome/exposomea_02jun21_v2.RData"))
-    ea1 <- pegs_convert_type(epr.ea, epr.ea.meta)
-    ea2 <- cvt(epr.ea, epr.ea.meta, quiet=FALSE)
-    cat("ea1 == ea2: ", all.equal(as.data.frame(ea1), ea2), "\n", sep="")
-    
-    ## test exposome B
-    load(file.path(pgs_dir, "Surveys/Exposome/exposomeb_02jun21_v2.RData"))
-    eb1 <- pegs_convert_type(epr.eb, epr.eb.meta)
-    eb2 <- cvt(epr.eb, epr.eb.meta, quiet=FALSE)
-    cat("eb1 == eb2: ", all.equal(as.data.frame(eb1), eb2), "\n", sep="")
-
-    invisible(NULL)
 }
