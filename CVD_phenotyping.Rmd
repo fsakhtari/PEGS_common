@@ -1,0 +1,99 @@
+---
+title: "Cardiovascular phenotypes"
+author: Eunice Lee
+date: 03/15/2022
+output:
+  html_document:
+    code_folding: show
+    df_print: kable
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+    always_allow_html: yes
+---
+
+```{r}
+library(aod)
+library(summarytools)
+library(naniar)
+library(tidyverse) # a package to format your data
+library(kableExtra)
+library(knitr)
+library(data.table)
+library(wrapr)
+```
+
+#### Load PEGS data (datafreez v2).
+```{r}
+
+load('/Volumes/PEGS/StatGen/lloyddt/Phenotyping/clean_he.Rdata')
+```
+
+
+# 2. Prepare phenotype data
+#### Isolate and define cardiovascular outcome variable. Extract age, sex, BMI, race, and income variables as covariates.
+
+```{r}
+# Select all cardiovascular outcome variables from the health survey
+
+tokeep1 <- c("epr_number","he_b007_hypertension_PARQ","he_b008_high_cholesterol",
+            "he_b009_atherosclerosis", "he_b010_cardiac_arrhythmia","he_b011_angina",
+            "he_b012_heart_attack","he_b013_coronary_artery","he_b014_congestive_heart_failure",
+            "he_b015_poor_blood_flow","he_b017_blood_clots",
+            "he_b018_angioplasty","he_b020_stroke_PARQ", "he_t203_income", "he_s179_100_cigarettes_PARQ")
+
+CVD.patients <- clean_he %>% dplyr::select(all_of(tokeep1))
+
+
+
+```
+
+
+Define All Outcomes 
+-----------
+```{r}
+CVD_Outcomes <- CVD.patients %>% dplyr::mutate(Stroke = ifelse(he_b020_stroke_PARQ== 1,1,0),
+                                               Heart_Attack = ifelse(he_b012_heart_attack== 1,1,0),
+                                               Arrhythmia = ifelse(he_b010_cardiac_arrhythmia== 1,1,0),
+                                               CAD = ifelse(he_b013_coronary_artery== 1,1,0),
+                                               CHF = ifelse(he_b014_congestive_heart_failure== 1,1,0),
+                                               Cholesterol = ifelse(he_b008_high_cholesterol== 1,1,0),
+                                               Hypertension = ifelse(he_b007_hypertension_PARQ== 1,1,0),
+                                               AVSD = ifelse(he_b009_atherosclerosis== 1,1,0),
+                                               Angina = ifelse(he_b011_angina== 1,1,0),
+                                               Angioplasty = ifelse(he_b018_angioplasty== 1,1,0),
+                                               PBF = ifelse(he_b015_poor_blood_flow== 1,1,0),
+                                               Bclots = ifelse(he_b017_blood_clots== 1,1,0)
+                                               ) %>% 
+  dplyr::select(epr_number,Stroke,Heart_Attack,Arrhythmia,CAD,CHF,Cholesterol,Hypertension,AVSD,Angina,Angioplasty,PBF,Bclots)
+
+
+
+
+CVD_Outcomes$Atherogenic <- NA
+CVD_Outcomes$Atherogenic[CVD.patients$he_b020_stroke_PARQ == 1 |
+                           CVD.patients$he_b012_heart_attack == 1 |
+                           CVD.patients$he_b013_coronary_artery == 1 |
+                           CVD.patients$he_b011_angina == 1 |
+                           CVD.patients$he_b018_angioplasty == 1 |
+                           CVD.patients$he_b009_atherosclerosis == 1] <- 1
+
+CVD_Outcomes <- CVD_Outcomes %>% mutate(Atherogenic = ifelse(is.na(Atherogenic),0,Atherogenic))
+```
+
+
+
+
+
+
+
+# All Outcomes Summary 
+ 
+```{r}
+
+save(CVD_Outcomes, file = "/Volumes/PEGS/StatGen/lloyddt/Phenotyping/Phenotype_Files/CVD_Phenotypes.RData")
+```
+ 
+
+
+    
