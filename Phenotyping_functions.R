@@ -1,4 +1,6 @@
 library(tidyverse)
+load('/Volumes/PEGS/StatGen/lloyddt/Phenotyping/clean_he.Rdata')
+
 
 
 ## PEGS Phenotyping function. Input data is the health and exposure survey that has been fed through the pegs_convert_type function
@@ -9,7 +11,7 @@ library(tidyverse)
 pegs_phenotyping <- function(input_data, 
                              phenotype = c("lower_gi_polyps",'fibroids',
                                            'boneloss','migraines','IDA',
-                                           'ovariancysts','asthma','cvd')){
+                                           'ovariancysts','asthma','cvd',"T2D","Allergic_Rhinitis")){
   
   if(phenotype == "lower_gi_polyps"){
     
@@ -181,14 +183,42 @@ pegs_phenotyping <- function(input_data,
     
     
   }
+  
+  
+  if(phenotype == "T2D"){
+    
+    exclusion_cols <- c('he_c022a_diabetes_preg_CHILDQ')
+    ex_df <- input_data[c(exclusion_cols)] 
+    ex_df[] <- lapply(ex_df, function(x) as.numeric(as.character(x))) 
+    d <- ex_df %>% 
+      as.data.frame(.) %>% 
+      mutate(sum = rowSums(.,na.rm = T)) %>% dplyr::select(sum,everything())
+    epr_number <- input_data$epr_number
+    
+    ex_df <- cbind(epr_number,d) %>% dplyr::select(epr_number,sum)
+    he_vars <- input_data %>% dplyr::select(epr_number,he_c022_diabetes_PARQ)
+    pheno_data <- left_join(he_vars,ex_df, by = 'epr_number') %>% 
+      mutate(Flag = ifelse(sum == 0,0,1)) %>% 
+      mutate(Type_2_Diabetes = case_when(he_c022_diabetes_PARQ == 1 ~ 1,
+                                he_c022_diabetes_PARQ == 0 & Flag == 0 ~ 0,
+                                TRUE ~ NA_real_)) %>% 
+      dplyr::select(epr_number,Type_2_Diabetes)
+    
+    
+    
+    
+  }
+  
+  if(phenotype == "Allergic_Rhinitis"){
+    
+    pheno_data <- input_data %>% 
+      mutate("Allergic_Rhinitis" = ifelse(he_d024_allergies==1,1,0)) %>% 
+      dplyr::select(epr_number,Allergic_Rhinitis)
+    
+  }
+  
   pheno_data <- sapply( pheno_data, as.numeric )
   pheno_data <- as.data.frame(pheno_data)
   return(pheno_data)
   
 }
-
-
-
-
-
-
