@@ -631,26 +631,5 @@ prepare_pegs_phenotype <- function(pegs_data,
   return(pheno_data)
 }
 
-#Test function 
 
-# all_phenos <- data.frame('epr_number' = clean_he$epr_number)
-# 
-# myphenos <- c("lower_gi_polyps",'fibroids',
-#               'boneloss','migraines','IDA',
-#               'ovariancysts','asthma',"T2D","Allergic_Rhinitis",
-#               'Stroke','Heart_Attack','Arrhythmia','CAD','CHF',
-#               'Cholesterol','Hypertension','AVSD','Angina','Angioplasty',
-#               'PBF','Bclots','Atherogenic')
-# 
-# 
-# 
-# for(i in seq_along(myphenos)){
-#   
-#   
-#   curr_data <- prepare_pegs_phenotype(pegs_data = clean_he, phenotype = myphenos[i]) 
-#   
-#   all_phenos <- full_join(all_phenos,curr_data)
-# 
-# }
-# 
 
