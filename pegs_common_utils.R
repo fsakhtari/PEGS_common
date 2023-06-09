@@ -9,15 +9,15 @@ if (!"librarian" %in% rownames(installed.packages())) {
   install.packages("librarian")
 }
 library(librarian)
-librarian::shelf(data.table, naniar, tidyverse, wrapr)
+librarian::shelf(data.table, naniar, tidyverse)
 
 
 ### Common constants ###
 
 # special codes
-PEGS_SP_CODES <- qc(
-  .M, .S, .N,
-  -444444, -555555, -666666, -777777, -888888, -999999
+PEGS_SP_CODES <- c(
+  ".M", ".S", ".N",
+  c(seq(-111111, -999999, by = -111111))
 )
 
 
