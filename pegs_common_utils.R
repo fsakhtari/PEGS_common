@@ -23,14 +23,20 @@ PEGS_SP_CODES <- c(
 
 ### Common functions ###
 
+# This function is obsolete, use pegs_convert_type().
 # Convert columns in the PEGS dataframe to appropriate variable types as
-# specified in the metadata file. Special codes are converted to NA.
+# specified in the metadata file. All special codes are converted to NA.
 # Arguments:-
 # pegs_df       : The PEGS dataframe to convert
 # pegs_df_meta  : The accompanying PEGS metadata dataframe
 # Returns:-
 # The converted PEGS dataframe
-pegs_convert_type_original <- function(pegs_df, pegs_df_meta) {
+pegs_convert_type_obsolete <- function(pegs_df, pegs_df_meta) {
+  .Deprecated(
+    new = "pegs_convert_type()", package = "pegs_common_utils.R",
+    msg = "pegs_convert_type_obsolete() is obsolete! Use pegs_convert_type()."
+  )
+  
   # All special codes need to be replaced with NA before type conversion
   pegs_df <- pegs_df %>%
     replace_with_na_all(condition = ~ .x %in% PEGS_SP_CODES)
@@ -57,8 +63,8 @@ pegs_convert_type_original <- function(pegs_df, pegs_df_meta) {
 
 #' PEGS data converter
 #'
-#' Convert columns  in the  PEGS data  frame to  appropriate variable  types as
-#' specified in the metadata file.  Special codes are converted to NA.
+#' Convert columns in the PEGS data frame to appropriate variable types as
+#' specified in the metadata file. All special codes are converted to NA.
 #'
 #' @param pegs_df The PEGS dataframe to convert
 #' @param pegs_df_meta The accompanying PEGS metadata dataframe
