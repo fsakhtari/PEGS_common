@@ -268,53 +268,361 @@ prepare_ukb_phenotype <- function(ukb_data, phenotype) {
 # Returns:-
 # A dataframe (epr_number = participant ID, Y = phenotype). All participants to
 # be excluded have their phenotype marked as NA.
-prepare_pegs_phenotype <- function(pegs_data, phenotype) {
+prepare_pegs_phenotype <- function(pegs_data, 
+                                   phenotype = c("lower_gi_polyps",'fibroids',
+                                                 'boneloss','migraines','IDA',
+                                                 'ovariancysts','asthma',"T2D","Allergic_Rhinitis",
+                                                 'Stroke','Heart_Attack','Arrhythmia','CAD','CHF',
+                                                 'Cholesterol','Hypertension','AVSD','Angina','Angioplasty',
+                                                 'PBF','Bclots','Atherogenic')) {
   pheno_data <- NULL
 
-  # Type 2 diabetes (T2D)
-  if (phenotype == "T2D") {
-    # Exclude participants with likely different disease etiology, i.e. those
-    # with age at onset < 20 (these are likely Type 1 diabetes or MODY ppts) or
-    # those with gestational diabetes only
-    pegs_data <- pegs_data %>%
-      mutate(onset_age_under_20 = (if_else(he_c022e_diabetes_age_CHILDQ < 20, 1, 0)))
-
-    diabetes_exclusions <- pegs_data %>%
-      filter(he_c022_diabetes_PARQ == 1) %>%
-      filter(onset_age_under_20 == 1 |
-        is.na(onset_age_under_20)) %>%
-      pull(epr_number)
-    diabetes_exclusions <- sort(unique(c(
-      diabetes_exclusions,
-      (pegs_data %>%
-        filter(he_c022_diabetes_PARQ == 1 &
-          .data[["_he_gender_"]] %in% c(1, NA)) %>%
-        filter(he_c022a_diabetes_preg_CHILDQ == 1) %>%
-        pull(epr_number))
-    )))
-
-    pegs_data <- pegs_data %>%
-      mutate(Y = replace(
-        he_c022_diabetes_PARQ,
-        epr_number %in% diabetes_exclusions,
-        NA
-      ))
-
-    # Put all variables that were used for phenotype preparation into a
-    # dataframe
-    pheno_data <- pegs_data %>%
-      select(all_of(c(
-        "epr_number", "he_c022_diabetes_PARQ", "onset_age_under_20",
-        "_he_gender_", "he_c022a_diabetes_preg_CHILDQ", "Y"
-      )))
-  } else {
-    stop(paste("Unrecognized phenotype string :"), phenotype)
+  .lower_gi_phenotype <- function(pegs_data){
+    
+    cancer_cols <- names(pegs_data)[grep('cancer',names(pegs_data),ignore.case = T)]
+    cancer_ex <- c('age|sis|bro|dad|mom')
+    cancer_cols <- cancer_cols[-grep(cancer_ex,cancer_cols,ignore.case = T)]
+    gi_cols <- c('he_f038_lactose_intolerance','he_f039_crohns','he_f040_ulcerative_colitis')
+    exclusion_cols <- c(cancer_cols,gi_cols)
+    ex_df <- pegs_data[c(exclusion_cols)] 
+    ex_df[] <- lapply(ex_df, function(x) as.numeric(as.character(x))) 
+    d <- ex_df %>% 
+      as.data.frame(.) %>% 
+      mutate(sum = rowSums(.,na.rm = T)) %>% dplyr::select(sum,everything())
+    epr_number <- pegs_data$epr_number
+    ex_df <- cbind(epr_number,d) %>% dplyr::select(epr_number,sum)
+    he_vars <- pegs_data %>% dplyr::select(epr_number,he_f041_polyps,he_age_derived)
+    pheno_data <- left_join(he_vars,ex_df, by = 'epr_number') %>% 
+      mutate(Flag = ifelse(sum == 0,0,1)) %>% 
+      mutate(Lower_GI_Polyps = case_when(he_f041_polyps == 1 ~ 1,
+                                         he_f041_polyps == 0 & Flag == 0 ~ 0,
+                                         TRUE ~ NA_real_)) %>% 
+      dplyr::select(epr_number,Lower_GI_Polyps)
+    
+    return(pheno_data)
+    
   }
-
-  cat(
-    phenotype,
-    "phenotype reclassification (Y) based on inclusion/exclusion criteria:", "\n"
-  )
+  
+  .fibroids_phenotype <- function(pegs_data){
+    f_he <- pegs_data %>% dplyr::filter(`_he_gender_`==1)
+    f_he[] <- lapply(f_he, function(x) as.numeric(as.character(x))) 
+    cancer_cols <- names(pegs_data)[grep('cancer',names(pegs_data),ignore.case = T)]
+    cancer_ex <- c('age|sis|bro|dad|mom')
+    cancer_cols <- cancer_cols[-grep(cancer_ex,cancer_cols,ignore.case = T)]
+    exclusion_cols <- c('he_m092_ovarian_cysts','he_m089_endometriosis','he_m090_uterine_polyps')
+    f_ex <- f_he[c(exclusion_cols)] %>% 
+      mutate(sum = rowSums(.,na.rm = T)) %>% dplyr::select(sum,everything())
+    epr_number <- f_he$epr_number
+    ex_df <- cbind(epr_number,f_ex) %>% dplyr::select(epr_number,sum)
+    he_vars <- f_he %>% dplyr::select(epr_number,he_m091_uterine_tumors,he_age_derived)
+    pheno_data <- left_join(he_vars,ex_df, by = 'epr_number') %>% 
+      mutate(Flag = ifelse(sum == 0,0,1)) %>% 
+      mutate(Fibroids = case_when(he_m091_uterine_tumors == 1 ~ 1,
+                                  he_m091_uterine_tumors == 0 & Flag == 0 ~ 0,
+                                  TRUE ~ NA_real_)) %>% 
+      dplyr::select(epr_number,Fibroids)
+    return(pheno_data)
+    
+  }
+  
+  .boneloss_phenotype <- function(pegs_data){
+    pegs_data[] <- lapply(pegs_data, function(x) as.numeric(as.character(x))) 
+    bone_cancer <- pegs_data %>% dplyr::select(epr_number,he_o106_cancer_bone_PARQ_CHILDQ)
+    bone_cancer[is.na(bone_cancer)] <- 0
+    ex_df <- pegs_data %>% 
+      dplyr::filter(!is.na(he_j062_bone_loss) & !is.na(he_j063_osteoporosis) ) %>% 
+      dplyr::select(epr_number,he_j062_bone_loss,he_j063_osteoporosis) %>% 
+      column_to_rownames('epr_number') %>% 
+      dplyr::mutate(sum = rowSums(.,na.rm = T),
+                    Bone_Loss = ifelse(sum >0,1,0)) %>% 
+      rownames_to_column('epr_number') %>% 
+      mutate(epr_number = as.numeric(as.character(epr_number))) %>% 
+      left_join(.,bone_cancer, by = "epr_number") %>% 
+      mutate(Bone_Loss = ifelse(he_o106_cancer_bone_PARQ_CHILDQ == 1 & Bone_Loss == 0,NA,Bone_Loss) ) %>% 
+      dplyr::select(epr_number,Bone_Loss)
+    pheno_data <- ex_df 
+    return(pheno_data)
+    
+    
+  }
+  
+  .migraines_phenotype <- function(pegs_data){
+    pegs_data[] <- lapply(pegs_data, function(x) as.numeric(as.character(x))) 
+    cancer <- pegs_data %>% dplyr::select(epr_number,he_o107_cancer_brain_PARQ_CHILDQ)
+    cancer[is.na(cancer)] <- 0
+    ex_df <- pegs_data %>% 
+      dplyr::select(epr_number,he_e032_migraine) %>% 
+      dplyr::mutate(Migraines = ifelse(he_e032_migraine == 1,1,0)) %>% 
+      mutate(epr_number = as.numeric(as.character(epr_number))) %>% 
+      left_join(.,cancer, by = "epr_number") %>% 
+      mutate(Migraines = ifelse(he_o107_cancer_brain_PARQ_CHILDQ == 1 & Migraines == 0,NA,Migraines) ) %>% 
+      dplyr::select(epr_number,Migraines)
+    pheno_data <- ex_df
+    return(pheno_data)
+    
+  }
+  
+  .ida_phenotype <- function(pegs_data){
+    exclusion_cols <- c('he_i060_pernicious_anemia','he_i061_sickle_cell','he_o115_cancer_leukemia_PARQ_CHILDQ')
+    pegs_data[] <- lapply(pegs_data, function(x) as.numeric(as.character(x))) 
+    d <- pegs_data[c(exclusion_cols)] %>% 
+      mutate(sum = rowSums(.,na.rm = T)) %>% dplyr::select(sum,everything())
+    epr_number <- pegs_data$epr_number
+    ex_df <- cbind(epr_number,d) %>% dplyr::select(epr_number,sum)
+    he_vars <- pegs_data %>% dplyr::select(epr_number,he_i059_iron_anemia)
+    pheno_data <- left_join(he_vars,ex_df, by = 'epr_number') %>% 
+      mutate(Flag = ifelse(sum == 0,0,1)) %>% 
+      mutate(Iron_Def_Anemia = case_when(he_i059_iron_anemia == 1 ~ 1,
+                                         he_i059_iron_anemia == 0 & Flag == 0 ~ 0,
+                                         TRUE ~ NA_real_)) %>%  
+      dplyr::select(epr_number,Iron_Def_Anemia)
+    return(pheno_data)
+    
+  }
+  
+  .ovarian_cysts_phenotype <- function(pegs_data){ 
+    f_he <- pegs_data %>% dplyr::filter(`_he_gender_`==1)
+    f_he[] <- lapply(f_he, function(x) as.numeric(as.character(x))) 
+    cancer_cols <- names(pegs_data)[grep('cancer',names(pegs_data),ignore.case = T)]
+    cancer_ex <- c('age|sis|bro|dad|mom')
+    cancer_cols <- cancer_cols[-grep(cancer_ex,cancer_cols,ignore.case = T)]
+    exclusion_cols <- c('he_m091_uterine_tumors','he_m089_endometriosis','he_m090_uterine_polyps')
+    f_ex <- f_he[c(exclusion_cols)] %>% 
+      mutate(sum = rowSums(.,na.rm = T)) %>% dplyr::select(sum,everything())
+    epr_number <- f_he$epr_number
+    ex_df <- cbind(epr_number,f_ex) %>% dplyr::select(epr_number,sum)
+    he_vars <- f_he %>% dplyr::select(epr_number,he_m092_ovarian_cysts)
+    pheno_data <- left_join(he_vars,ex_df, by = 'epr_number') %>% 
+      mutate(Flag = ifelse(sum == 0,0,1)) %>% 
+      mutate(Ovarian_Cysts = case_when(he_m092_ovarian_cysts == 1 ~ 1,
+                                       he_m092_ovarian_cysts == 0 & Flag == 0 ~ 0,
+                                       TRUE ~ NA_real_)) %>%  
+      dplyr::select(epr_number,Ovarian_Cysts)
+    return(pheno_data)
+    
+    
+  }
+  
+  .asthma_phenotype <- function(pegs_data){
+    exclusion_cols <- c('he_d025_copd','he_d026_ipf','he_d027_tb_PARQ',"he_d028_cough_breathlessness","he_d029_chest_wheeze")
+    ex_df <- pegs_data[c(exclusion_cols)] 
+    ex_df[] <- lapply(ex_df, function(x) as.numeric(as.character(x))) 
+    d <- ex_df %>% 
+      as.data.frame(.) %>% 
+      mutate(sum = rowSums(.,na.rm = T)) %>% dplyr::select(sum,everything())
+    epr_number <- pegs_data$epr_number
+    
+    ex_df <- cbind(epr_number,d) %>% dplyr::select(epr_number,sum)
+    he_vars <- pegs_data %>% dplyr::select(epr_number,he_d030_asthma_PARQ)
+    pheno_data <- left_join(he_vars,ex_df, by = 'epr_number') %>% 
+      mutate(Flag = ifelse(sum == 0,0,1)) %>% 
+      mutate(Asthma = case_when(he_d030_asthma_PARQ == 1 ~ 1,
+                                he_d030_asthma_PARQ == 0 & Flag == 0 ~ 0,
+                                TRUE ~ NA_real_)) %>% 
+      dplyr::select(epr_number,Asthma)
+    return(pheno_data)
+    
+    
+  }
+  
+  .t2d_phenotype <- function(pegs_data){
+    exclusion_cols <- c('he_c022a_diabetes_preg_CHILDQ')
+    ex_df <- pegs_data[c(exclusion_cols)] 
+    ex_df[] <- lapply(ex_df, function(x) as.numeric(as.character(x))) 
+    d <- ex_df %>% 
+      as.data.frame(.) %>% 
+      mutate(sum = rowSums(.,na.rm = T)) %>% dplyr::select(sum,everything())
+    epr_number <- pegs_data$epr_number
+    
+    ex_df <- cbind(epr_number,d) %>% dplyr::select(epr_number,sum)
+    he_vars <- pegs_data %>% dplyr::select(epr_number,he_c022_diabetes_PARQ)
+    pheno_data <- left_join(he_vars,ex_df, by = 'epr_number') %>% 
+      mutate(Flag = ifelse(sum == 0,0,1)) %>% 
+      mutate(Type_2_Diabetes = case_when(he_c022_diabetes_PARQ == 1 ~ 1,
+                                         he_c022_diabetes_PARQ == 0 & Flag == 0 ~ 0,
+                                         TRUE ~ NA_real_)) %>% 
+      dplyr::select(epr_number,Type_2_Diabetes)
+    return(pheno_data)
+    
+    
+  }
+  
+  .ar_phenotype <- function(pegs_data){
+    pheno_data <- pegs_data %>% 
+      mutate("Allergic_Rhinitis" = ifelse(he_d024_allergies==1,1,0)) %>% 
+      dplyr::select(epr_number,Allergic_Rhinitis)
+    return(pheno_data)
+    
+  }
+  
+  .cvd_phenotype <- function(pegs_data){
+    tokeep1 <- c("epr_number","he_b007_hypertension_PARQ","he_b008_high_cholesterol",
+                 "he_b009_atherosclerosis", "he_b010_cardiac_arrhythmia","he_b011_angina",
+                 "he_b012_heart_attack","he_b013_coronary_artery","he_b014_congestive_heart_failure",
+                 "he_b015_poor_blood_flow","he_b017_blood_clots",
+                 "he_b018_angioplasty","he_b020_stroke_PARQ", "he_t203_income", "he_s179_100_cigarettes_PARQ")
+    CVD.patients <- pegs_data %>% dplyr::select(all_of(tokeep1))
+    CVD_Outcomes <- CVD.patients %>% dplyr::mutate(Stroke = ifelse(he_b020_stroke_PARQ== 1,1,0),
+                                                   Heart_Attack = ifelse(he_b012_heart_attack== 1,1,0),
+                                                   Arrhythmia = ifelse(he_b010_cardiac_arrhythmia== 1,1,0),
+                                                   CAD = ifelse(he_b013_coronary_artery== 1,1,0),
+                                                   CHF = ifelse(he_b014_congestive_heart_failure== 1,1,0),
+                                                   Cholesterol = ifelse(he_b008_high_cholesterol== 1,1,0),
+                                                   Hypertension = ifelse(he_b007_hypertension_PARQ== 1,1,0),
+                                                   AVSD = ifelse(he_b009_atherosclerosis== 1,1,0),
+                                                   Angina = ifelse(he_b011_angina== 1,1,0),
+                                                   Angioplasty = ifelse(he_b018_angioplasty== 1,1,0),
+                                                   PBF = ifelse(he_b015_poor_blood_flow== 1,1,0),
+                                                   Bclots = ifelse(he_b017_blood_clots== 1,1,0)
+    ) %>% 
+      dplyr::select(epr_number,Stroke,Heart_Attack,Arrhythmia,CAD,CHF,Cholesterol,Hypertension,AVSD,Angina,Angioplasty,PBF,Bclots)
+    CVD_Outcomes$Atherogenic <- NA
+    CVD_Outcomes$Atherogenic[CVD.patients$he_b020_stroke_PARQ == 1 |
+                               CVD.patients$he_b012_heart_attack == 1 |
+                               CVD.patients$he_b013_coronary_artery == 1 |
+                               CVD.patients$he_b011_angina == 1 |
+                               CVD.patients$he_b018_angioplasty == 1 |
+                               CVD.patients$he_b009_atherosclerosis == 1] <- 1
+    pheno_data <- CVD_Outcomes %>% mutate(Atherogenic = ifelse(is.na(Atherogenic),0,Atherogenic))
+    
+    return(pheno_data)
+    
+  }
+  
+  if(phenotype == "lower_gi_polyps"){
+    
+    pheno_data <- .lower_gi_phenotype(pegs_data = pegs_data)
+    
+  }
+  
+  if(phenotype == "fibroids"){
+    pheno_data <- .fibroids_phenotype(pegs_data = pegs_data)
+  }
+  
+  if(phenotype == "boneloss"){
+    pheno_data <- .boneloss_phenotype(pegs_data = pegs_data)
+    
+  }
+  
+  if(phenotype == "migraines"){
+    pheno_data <- .migraines_phenotype(pegs_data = pegs_data)
+    
+  }
+  
+  if(phenotype == "IDA"){
+    pheno_data <- .ida_phenotype(pegs_data = pegs_data)
+    
+  }
+  
+  if(phenotype == "ovariancysts"){
+    pheno_data <- .ovarian_cysts_phenotype(pegs_data = pegs_data)
+  }
+  
+  if(phenotype == "asthma"){
+    pheno_data <- .asthma_phenotype(pegs_data = pegs_data)
+    
+    
+  }
+  
+  if(phenotype == "T2D"){
+    
+    pheno_data <- .t2d_phenotype(pegs_data = pegs_data)
+    
+  }
+  
+  if(phenotype == "Allergic_Rhinitis"){
+    
+    pheno_data <- .ar_phenotype(pegs_data = pegs_data)
+    
+  }
+  
+  if(phenotype == "Stroke"){
+    
+    pheno_data <- .cvd_phenotype(pegs_data = pegs_data) %>% 
+      dplyr::select(epr_number,Stroke)
+    
+  }
+  
+  if(phenotype == "Heart_Attack"){
+    
+    pheno_data <- .cvd_phenotype(pegs_data = pegs_data) %>% 
+      dplyr::select(epr_number,Heart_Attack)
+    
+  }
+  
+  if(phenotype == "Arrhythmia"){
+    
+    pheno_data <- .cvd_phenotype(pegs_data = pegs_data) %>% 
+      dplyr::select(epr_number,Arrhythmia)
+    
+  }
+  
+  if(phenotype == "CAD"){
+    
+    pheno_data <- .cvd_phenotype(pegs_data = pegs_data) %>% 
+      dplyr::select(epr_number,CAD)
+    
+  }
+  
+  if(phenotype == "CHF"){
+    
+    pheno_data <- .cvd_phenotype(pegs_data = pegs_data) %>% 
+      dplyr::select(epr_number,CHF)
+    
+  }
+  if(phenotype == "Cholesterol"){
+    
+    pheno_data <- .cvd_phenotype(pegs_data = pegs_data) %>% 
+      dplyr::select(epr_number,Cholesterol)
+    
+  }
+  if(phenotype == "Hypertension"){
+    
+    pheno_data <- .cvd_phenotype(pegs_data = pegs_data) %>% 
+      dplyr::select(epr_number,Hypertension)
+    
+  }
+  if(phenotype == "AVSD"){
+    
+    pheno_data <- .cvd_phenotype(pegs_data = pegs_data) %>% 
+      dplyr::select(epr_number,AVSD)
+    
+  }
+  if(phenotype == "Angina"){
+    
+    pheno_data <- .cvd_phenotype(pegs_data = pegs_data) %>% 
+      dplyr::select(epr_number,Angina)
+    
+  }
+  if(phenotype == "Angioplasty"){
+    
+    pheno_data <- .cvd_phenotype(pegs_data = pegs_data) %>% 
+      dplyr::select(epr_number,Angioplasty)
+    
+  }
+  if(phenotype == "PBF"){
+    
+    pheno_data <- .cvd_phenotype(pegs_data = pegs_data) %>% 
+      dplyr::select(epr_number,PBF)
+    
+  }
+  if(phenotype == "Bclots"){
+    
+    pheno_data <- .cvd_phenotype(pegs_data = pegs_data) %>% 
+      dplyr::select(epr_number,Bclots)
+    
+  }
+  if(phenotype == "Atherogenic"){
+    
+    pheno_data <- .cvd_phenotype(pegs_data = pegs_data) %>% 
+      dplyr::select(epr_number,Atherogenic)
+    
+  }
+  
+  pheno_data <- sapply( pheno_data, as.numeric )
+  pheno_data <- as.data.frame(pheno_data)
+  #names(pheno_data) <- c('epr_number','Y')
+  
   pheno_data %>%
     select(-epr_number) %>%
     group_by_all() %>%
@@ -322,9 +630,12 @@ prepare_pegs_phenotype <- function(pegs_data, phenotype) {
     print(n = Inf)
 
   # Create cases(=1) & controls(=0) dataframe
-  pegs_pheno_prepd <- pheno_data %>% select(epr_number, Y)
+  #pegs_pheno_prepd <- pheno_data %>% select(epr_number, Y)
   cat("Phenotype = ", phenotype, "\n")
-  print(table(pegs_pheno_prepd$Y, exclude = NULL))
+  print(table(pheno_data[2], exclude = NULL))
 
-  return(pegs_pheno_prepd)
+  return(pheno_data)
 }
+
+
+

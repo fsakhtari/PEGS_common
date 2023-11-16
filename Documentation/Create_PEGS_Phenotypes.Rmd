@@ -1,0 +1,63 @@
+---
+title: "Generate PEGS Phenotypes"
+author: "Dillon Lloyd"
+date: '2022-09-28'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+```
+
+Source PEGS Functions
+-----------
+```{r}
+#source the PEGS Functions
+source("../pegs_common_utils.R")
+
+```
+
+Convert Type Raw PEGS Surveys 
+--------------
+
+```{r}
+#Convert PEGS Dataset to correct types
+pgs_dir <- "/ddn/gs1/project/controlled/PEGS/Data_Freezes/freeze_v2"
+load(file.path(pgs_dir, "Surveys/Health_and_Exposure/healthexposure_26aug21_v2.RData"))
+clean_he <- pegs_convert_type(epr.he, epr.he.meta,quiet = FALSE)
+
+```
+
+Create Phenotype Dataframe used in All ExWAS
+-----------------------
+
+```{r}
+#Test function 
+
+all_phenos <- data.frame('epr_number' = clean_he$epr_number)
+
+myphenos <- c("lower_gi_polyps",'fibroids',
+              'boneloss','migraines','IDA',
+              'ovariancysts','asthma',"T2D","Allergic_Rhinitis",
+              'Stroke','Heart_Attack','Arrhythmia','CAD','CHF',
+              'Cholesterol','Hypertension','AVSD','Angina','Angioplasty',
+              'PBF','Bclots','Atherogenic')
+
+
+
+for(i in seq_along(myphenos)){
+
+
+  curr_data <- prepare_pegs_phenotype(pegs_data = clean_he, phenotype = myphenos[i])
+
+  all_phenos <- full_join(all_phenos,curr_data)
+
+}
+
+```
+
+
+
+
